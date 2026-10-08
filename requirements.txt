@@ -1,0 +1,9 @@
+flask
+gunicorn
+yfinance
+pandas
+numpy
+plotly
+markdown
+anthropic
+weasyprint

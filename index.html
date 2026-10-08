@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Equity Research Studio</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#f5f7fa;color:#1a1a1a}
+header{background:#0f2742;color:#fff;padding:18px 24px}header h1{margin:0;font-size:20px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.bar input{padding:9px;border-radius:6px;border:0;min-width:240px}
+.bar button{padding:9px 16px;border:0;border-radius:6px;background:#2f80ed;color:#fff;cursor:pointer}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;padding:18px 24px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:#fff;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px #0001;overflow-x:auto}
+aside .card{position:sticky;top:12px}
+table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}td,th{border:1px solid #ddd;padding:5px 8px}th{background:#eef2f7}
+.i{display:inline-block;width:15px;height:15px;line-height:15px;text-align:center;border-radius:50%;background:#2f80ed;color:#fff;font-size:10px;font-style:italic;margin-left:5px;cursor:help;position:relative;vertical-align:super}
+.i:hover::after,.i:focus::after{content:attr(data-tip);position:absolute;left:18px;top:-6px;width:230px;background:#0f2742;color:#fff;padding:8px;border-radius:6px;font-style:normal;font-size:12px;line-height:1.4;z-index:9;text-align:left}
+.sp{color:#888}.err{color:#b00020}
+@media print{header,aside,.bar,.dl{display:none}.grid{display:block}.i{display:none}}
+</style></head><body>
+<header><h1>📊 Equity Research Studio</h1>
+<div class="bar"><input id="q" placeholder="Company name or ticker (e.g. Infosys, TCS.NS, AAPL)">
+<input id="peers" placeholder="Peers (optional): INFY.NS, WIPRO.NS">
+<input id="wacc" type="number" step="0.25" value="10" style="min-width:70px" title="WACC %"><input id="tg" type="number" step="0.25" value="4" style="min-width:70px" title="Terminal growth %">
+<button onclick="go()">Generate Report</button></div></header>
+<div class="grid"><main>
+<div id="status" class="sp card">Enter a company name or ticker to begin. Educational use only - not investment advice.</div>
+<div id="content" style="display:none">
+<div class="card" id="rep"></div>
+<div class="card" id="sec-industry"><h2>🌍 Industry Standing: Global & Country</h2><div class="b sp">Loading…</div></div>
+<div class="card" id="sec-business"><h2>🏢 Business Model</h2><div class="b sp">Loading…</div></div>
+<div class="card" id="sec-research"><h2>🏦 Recent Brokerage / Fund-House Research</h2><div class="b sp">Loading…</div></div>
+<div class="card" id="sec-concall"><h2>🎙️ Latest Concall Analysis</h2><div class="b sp">Loading…</div></div>
+<div class="card" id="sec-management"><h2>👔 Management & Governance</h2><div class="b sp">Loading…</div></div></div>
+<div id="chart" class="card" style="display:none"></div>
+<div class="dl" id="dl" style="display:none"><button onclick="dl('html')">⬇ Download HTML</button> <button onclick="dl('pdf')">⬇ Download PDF</button></div>
+</main><aside id="side" style="display:none"><div class="card"><h3>Industry-Specific Metrics</h3><div id="kpis"></div><p class="sp" style="font-size:12px">Metrics a sector analyst tracks first. Items marked "Not in Yahoo data" must come from company filings.</p></div></aside></div>
+<script>
+let SYM="";
+const $=id=>document.getElementById(id);
+async function go(){
+  const q=$("q").value.trim(); if(!q)return;
+  $("status").style.display="block";$("status").textContent="⏳ Fetching data & computing…";$("content").style.display="none";
+  const u=new URLSearchParams({q,peers:$("peers").value,wacc:$("wacc").value,tg:$("tg").value});
+  const r=await fetch("/api/report?"+u),j=await r.json();
+  if(!r.ok){$("status").innerHTML='<span class="err">'+(j.error||"Failed")+'</span>';return}
+  SYM=j.symbol;$("status").style.display="none";$("content").style.display="block";$("rep").innerHTML=j.html;
+  $("dl").style.display="block";
+  if(j.chart){$("chart").style.display="block";$("chart").innerHTML="";const d=document.createElement("div");d.innerHTML=j.chart;$("chart").appendChild(d);
+    d.querySelectorAll("script").forEach(s=>{const n=document.createElement("script");n.text=s.text;if(s.src)n.src=s.src;document.body.appendChild(n)})}
+  const m=j.meta;$("side").style.display="block";
+  $("kpis").innerHTML="<p><b>"+(m.industry||m.sector||"")+"</b></p><table>"+(m.kpis||[]).map(k=>"<tr><td>"+k[0]+"</td><td>"+k[1]+"</td></tr>").join("")+"</table>";
+  ["industry","business","research","concall","management"].forEach(s=>{
+    const b=document.querySelector("#sec-"+s+" .b");b.className="b sp";b.textContent="⏳ Researching…";
+    const p=new URLSearchParams({name:m.name,symbol:j.symbol,sector:m.sector,industry:m.industry,country:m.country});
+    fetch("/api/ai/"+s+"?"+p).then(x=>x.json()).then(x=>{b.className="b";b.innerHTML=x.html||'<span class="err">'+x.error+'</span>'}).catch(e=>b.textContent="Failed: "+e)})
+}
+$("q").addEventListener("keydown",e=>{if(e.key==="Enter")go()});
+async function dl(fmt){
+  const f=new FormData();f.append("html",$("content").innerHTML);f.append("symbol",SYM);
+  const r=await fetch("/download/"+fmt,{method:"POST",body:f});
+  if(!r.ok){alert("Server PDF unavailable - opening print dialog; choose 'Save as PDF'.");window.print();return}
+  const a=document.createElement("a");a.href=URL.createObjectURL(await r.blob());a.download=SYM+"_report."+fmt;a.click()}
+</script></body></html>
