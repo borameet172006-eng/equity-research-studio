@@ -1,6 +1,7 @@
 import os, datetime as dt, functools, anthropic
 MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5")
-client = anthropic.Anthropic()  # needs ANTHROPIC_API_KEY
+   def _client():
+       return anthropic.Anthropic()  # needs ANTHROPIC_API_KEY
 TOOLS = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 6}]
 RULES = ("You are an equity research analyst. Use web search for current facts. Cite source name and date inline. "
          "Never invent numbers, price targets, quotes or names; if something is not found write 'Not found in public sources'. "
@@ -15,7 +16,7 @@ P = {
 @functools.lru_cache(maxsize=256)
 def _run(section, name, symbol, sector, industry, country, day):
     prompt = P[section].format(name=name, symbol=symbol, sector=sector or "n/a", industry=industry or "n/a", country=country or "India")
-    r = client.messages.create(model=MODEL, max_tokens=3000, system=RULES, tools=TOOLS, messages=[{"role": "user", "content": prompt}])
+    r = _client().messages.create((model=MODEL, max_tokens=3000, system=RULES, tools=TOOLS, messages=[{"role": "user", "content": prompt}])
     return "".join(b.text for b in r.content if b.type == "text").strip()
 def run(section, **k):
     return _run(section, k["name"], k["symbol"], k["sector"], k["industry"], k["country"], dt.date.today().isoformat())
